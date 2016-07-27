@@ -495,6 +495,7 @@
 						<input type="text" id="svnUser" name="svnUser" value="mostgreat" class="AXInput" />
 						<label>SVN Password</label>
 						<input type="password" id="svnPassword" name="svnPassword" value="1234" class="AXInput" />
+						<input type="hidden" id="gubun" name="gubun" value="source" class="AXInput" />
 					</form>
 					
 					<table cellpadding="0" cellspacing="0" style="table-layout:fixed;width:100%;">
