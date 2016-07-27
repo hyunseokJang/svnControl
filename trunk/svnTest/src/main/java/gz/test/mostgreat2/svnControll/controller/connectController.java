@@ -1,24 +1,21 @@
 package gz.test.mostgreat2.svnControll.controller;
 
-import gz.test.mostgreat2.common.model.SimpleResult;
-import gz.test.mostgreat2.svnControll.model.DeployInfo;
-import gz.test.mostgreat2.svnControll.model.DeployInfoWrapper;
-import gz.test.mostgreat2.svnControll.model.SvnInfo;
-import gz.test.mostgreat2.svnControll.model.SvnInfoWrapper;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
 
+import org.mozilla.universalchardet.UniversalDetector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
@@ -31,6 +28,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.tmatesoft.svn.core.SVNCommitInfo;
 import org.tmatesoft.svn.core.SVNDirEntry;
 import org.tmatesoft.svn.core.SVNException;
+import org.tmatesoft.svn.core.SVNLogEntry;
+import org.tmatesoft.svn.core.SVNLogEntryPath;
 import org.tmatesoft.svn.core.SVNNodeKind;
 import org.tmatesoft.svn.core.SVNProperties;
 import org.tmatesoft.svn.core.SVNProperty;
@@ -53,6 +52,12 @@ import org.tmatesoft.svn.core.wc2.SvnDiff;
 import org.tmatesoft.svn.core.wc2.SvnOperationFactory;
 import org.tmatesoft.svn.core.wc2.SvnTarget;
 
+import gz.test.mostgreat2.common.model.SimpleResult;
+import gz.test.mostgreat2.svnControll.model.DeployInfo;
+import gz.test.mostgreat2.svnControll.model.DeployInfoWrapper;
+import gz.test.mostgreat2.svnControll.model.SvnInfo;
+import gz.test.mostgreat2.svnControll.model.SvnInfoWrapper;
+
 /**
  * Handles requests for the application home page.
  */
@@ -65,20 +70,43 @@ public class connectController {
 	private static String SVN_URL = "";
 	private static String SVN_USER = "";
 	private static String SVN_PASSWORD = "";
+	
+	private static String SVN_URL2 = "";
+	private static String SVN_USER2 = "";
+	private static String SVN_PASSWORD2 = "";
+	
 	private static HashMap<String, String> SVN_COPY_DIR = null;
 	
-	public static String getContent(String path, String name) throws UnsupportedEncodingException{
+	public static String detectCharset(ByteArrayOutputStream baos){
+		UniversalDetector detector = new UniversalDetector(null);
+		detector.handleData(baos.toByteArray(), 0, baos.toByteArray().length);
+		detector.dataEnd();
+		String encoding = detector.getDetectedCharset();
+	    detector.reset();
+	    return encoding;
+	}
+	
+	public static String getContent(String path, String name, Long rev, String gubun) throws UnsupportedEncodingException{
 		
+		// Gubun = source, target SVN
 		DAVRepositoryFactory.setup( );
 		ByteArrayOutputStream baos = null;
-        String filePath = "/" + path + name;
+        String filePath = "";
+        filePath = path + name;
         SVNRepository repository = null;
+        ISVNAuthenticationManager authManager = null;
         try {
-            repository = SVNRepositoryFactory.create( SVNURL.parseURIEncoded( SVN_URL ) );
-            ISVNAuthenticationManager authManager = SVNWCUtil.createDefaultAuthenticationManager( SVN_USER , SVN_PASSWORD );
-            repository.setAuthenticationManager( authManager );
-
-            SVNNodeKind nodeKind = repository.checkPath( filePath , -1 );
+        	if("source".equals(gubun)){
+        		repository = SVNRepositoryFactory.create( SVNURL.parseURIEncoded( SVN_URL ) );
+                authManager = SVNWCUtil.createDefaultAuthenticationManager( SVN_USER , SVN_PASSWORD );
+                repository.setAuthenticationManager( authManager );
+        	}else{
+        		repository = SVNRepositoryFactory.create( SVNURL.parseURIEncoded( SVN_URL2 ) );
+                authManager = SVNWCUtil.createDefaultAuthenticationManager( SVN_USER2 , SVN_PASSWORD2 );
+                repository.setAuthenticationManager( authManager );
+        	}
+            
+            SVNNodeKind nodeKind = repository.checkPath( filePath , rev );
             
             if ( nodeKind == SVNNodeKind.NONE ) {
                 logger.debug( "There is no entry at '" + SVN_URL + "'." );
@@ -103,12 +131,16 @@ public class connectController {
 
             if ( !isTextType ) {
             	return "Not a text file.";
-            	
             }
         }catch(Exception e){
         	logger.debug(e.getMessage());
         }
-        return baos.toString("UTF-8");
+        
+        String charset = detectCharset(baos);
+        if("EUC-KR".equals(charset))
+        	return baos.toString();
+        else
+        	return new String(baos.toByteArray(), "utf-8");
 	}
 
 	@RequestMapping(value = "/login.do", method = RequestMethod.POST)
@@ -116,21 +148,32 @@ public class connectController {
 			@RequestParam(value="svnUrl", required= true) String svnUrl,
 			@RequestParam(value="svnUser", required= true) String svnUser,
 			@RequestParam(value="svnPassword", required= true) String svnPassword,
+			@RequestParam(value="gubun", required= true) String gubun,
 			HttpServletRequest req) throws Exception {
 		
 		logger.debug("SVN Connect TRY");
 		
 		SVNRepositoryFactoryImpl.setup();
-		SVN_URL = svnUrl + "/";
-		SVN_USER = svnUser;
-		SVN_PASSWORD = svnPassword;
+		if("source".equals(gubun.trim())){
+			SVN_URL = ( svnUrl.endsWith("/"))? svnUrl : svnUrl + "/";
+			SVN_USER = svnUser;
+			SVN_PASSWORD = svnPassword;
+		}else{
+			SVN_URL2 = ( svnUrl.endsWith("/"))? svnUrl : svnUrl + "/";
+			SVN_USER2 = svnUser;
+			SVN_PASSWORD2 = svnPassword;
+		}
 		
 		SVNRepository repository = SVNRepositoryFactory.create(SVNURL.parseURIEncoded(svnUrl));
 		ISVNAuthenticationManager authManager = SVNWCUtil.createDefaultAuthenticationManager(svnUser, svnPassword);
 		repository.setAuthenticationManager(authManager);
 		repository.testConnection();
 		
-		logger.debug("SVN URL IS = " + repository.getLocation().toString());
+		if("source".equals(gubun.trim()))
+			logger.debug("SVN URL IS = " + repository.getLocation().toString());
+		else
+			logger.debug("SVN2 URL IS = " + repository.getLocation().toString());
+		
 		SvnInfoWrapper result = new SvnInfoWrapper();
 		result.setSvnList(listEntries(repository, ""));
 		List<String> rootDir = getChildList(repository ,result.getSvnList());
@@ -138,28 +181,85 @@ public class connectController {
 		return result;
 	}
 	
+	@RequestMapping(value = "/getHistory.do", method = RequestMethod.POST)
+	public @ResponseBody Map<String,String> getContent( HttpServletRequest req
+										    ,@RequestParam("gubun") String gubun,
+										    Model model) throws Exception {
+		logger.debug("SVN Get History");
+		String svnurl = "";
+		String user = "";
+		String password = "";
+		Map<String,String> result = new HashMap<String,String>();
+		if("source".equals(gubun)){
+			svnurl = SVN_URL;
+			user = SVN_USER;
+			password = SVN_PASSWORD;
+		}else{
+			svnurl = SVN_URL2;
+			user = SVN_USER2;
+			password = SVN_PASSWORD2;
+		}
+		SVNRepository repository = SVNRepositoryFactory.create(SVNURL.parseURIEncoded(svnurl));
+		ISVNAuthenticationManager authManger = SVNWCUtil.createDefaultAuthenticationManager(user, password);
+		repository.setAuthenticationManager(authManger);
+		
+		Collection logEntries = null;
+		logEntries = repository.log(new String[] {""}, null, 0, -1, true, true);
+		for( Iterator entries = logEntries.iterator(); entries.hasNext(); ){
+			SVNLogEntry logEntry = (SVNLogEntry)entries.next();
+			if(!entries.hasNext()){
+				result.put("revision", String.valueOf(logEntry.getRevision()));
+				result.put("author", logEntry.getAuthor());
+				result.put("date", logEntry.getDate().toString());
+				result.put("log", logEntry.getMessage());
+				result.put("change", "");
+				if(logEntry.getChangedPaths().size() > 0){
+					Set changedPathSet = logEntry.getChangedPaths().keySet();
+					String temp = "";
+					
+					for(Iterator changedPaths = changedPathSet.iterator(); changedPaths.hasNext();){
+						SVNLogEntryPath entryPath = (SVNLogEntryPath) logEntry.getChangedPaths().get(changedPaths.next());
+						temp += " "
+							  + entryPath.getType()
+							  + " "
+							  + entryPath.getPath()
+							  + ((entryPath.getCopyPath() != null ) ? "(from "
+									  + entryPath.getCopyPath() + " revision "
+									  + entryPath.getCopyRevision() + ")" : "" ) + "\n";
+					}
+					result.put("change", temp);
+				}
+			}
+		}
+		return result;
+	}
+	
 	@RequestMapping(value = "/getContent.do", method = RequestMethod.POST)
 	public @ResponseBody String getContent( HttpServletRequest req
 										    ,@RequestParam("name") String name
-										    ,@RequestParam("path") String path,
-										    Model model) throws Exception {
+										    ,@RequestParam("path") String path
+										    ,@RequestParam("rev") String rev
+										    ,@RequestParam("gubun") String gubun
+										    ,Model model) throws Exception {
 		
 		logger.debug("SVN Get Content");
 		logger.debug(path + name);
-		
-		return getContent(path, name);
+		String result = getContent(path, name, Long.parseLong(rev), gubun);
+		return result;
 		
 	}
 	
 	@RequestMapping(value = "/getDiff.do")
-	public @ResponseBody String seeDiff( HttpServletRequest req
+	public @ResponseBody List<String> seeDiff( HttpServletRequest req
 										    ,@RequestParam("sourceUrl") String sourceUrl
 										    ,@RequestParam("destinationUrl") String destinationUrl
 										    ,@RequestParam("sourceRevision") String sourceRevision
 										    ,@RequestParam("destinationRevision") String destinationRevision
 										    ) throws Exception {
-		String result = "";
+		
+		List<String> result = new ArrayList<String>();
 		SVNRepository repository = null;
+		SVNRepository repository2 = null;
 		final SvnOperationFactory svnOperationFactory = new SvnOperationFactory();
 	    try {
 	    	
@@ -167,12 +267,16 @@ public class connectController {
 	        ISVNAuthenticationManager authManager = SVNWCUtil.createDefaultAuthenticationManager( SVN_USER , SVN_PASSWORD );
 	        repository.setAuthenticationManager( authManager );
 	        
+	        repository2 = SVNRepositoryFactory.create( SVNURL.parseURIEncoded( SVN_URL2 ) );
+	        ISVNAuthenticationManager authManager2 = SVNWCUtil.createDefaultAuthenticationManager( SVN_USER2 , SVN_PASSWORD2 );
+	        repository2.setAuthenticationManager( authManager );
+	        
 	        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 	        final SvnDiffGenerator diffGenerator = new SvnDiffGenerator();
 	        diffGenerator.setBasePath(new File(""));
 	        
 	        final SVNURL url1 = SVNURL.parseURIEncoded( SVN_URL + sourceUrl );
-	        final SVNURL url2 = SVNURL.parseURIEncoded( SVN_URL + destinationUrl);
+	        final SVNURL url2 = SVNURL.parseURIEncoded( SVN_URL2 + destinationUrl);
 	        logger.debug("Source SVN URL is = " + url1);
 	        logger.debug("Target SVN URL is = " + url2);
 	        
@@ -189,8 +293,18 @@ public class connectController {
 	        diff.setOutput(byteArrayOutputStream);
 	        diff.run();
 	        logger.debug("Diff Result = " + byteArrayOutputStream);
-	        result = new String(byteArrayOutputStream.toByteArray()).replace(System.getProperty("line.separator"), "\n");
-	        result = ( result.trim().length() == 0 ) ? "No difference" : result;
+	        logger.debug("Diff Result = " + new String(byteArrayOutputStream.toByteArray(), "utf-8"));
+	        logger.debug("Diff Result = " + new String(byteArrayOutputStream.toByteArray(), "euc-kr"));
+	        
+	        String tempResult = new String(byteArrayOutputStream.toByteArray()).replace(System.getProperty("line.separator"), "\n");
+	        if(tempResult.trim().length() == 0){
+	        	result.add("No Difference");
+	        	return result;
+	        }else{
+	        	String[] tempString = tempResult.split("\n");
+	        	result = Arrays.asList(tempString);
+	        	logger.debug("Diff Result =" + result);
+	        }
 	        
 	    } finally {
 	        svnOperationFactory.dispose();
@@ -215,16 +329,14 @@ public class connectController {
 		String checksum = "";
 		SVNDeltaGenerator deltaGenerator = new SVNDeltaGenerator();
 	    try {
-			//repository = SVNRepositoryFactory.create( SVNURL.parseURIEncoded( SVN_URL ) );
-			final SVNRepository repository = repositoryPool.createRepository(SVNURL.parseURIEncoded( SVN_URL ), true);
-			repository2 = repositoryPool.createRepository(SVNURL.parseURIEncoded( SVN_URL ), false);
+			final SVNRepository repository = repositoryPool.createRepository(SVNURL.parseURIEncoded( SVN_URL2 ), true);
+			repository2 = repositoryPool.createRepository(SVNURL.parseURIEncoded( SVN_URL2 ), false);
 			
-	        ISVNAuthenticationManager authManager = SVNWCUtil.createDefaultAuthenticationManager( SVN_USER , SVN_PASSWORD );
+	        ISVNAuthenticationManager authManager = SVNWCUtil.createDefaultAuthenticationManager( SVN_USER2 , SVN_PASSWORD2 );
 	        repository.setAuthenticationManager( authManager );
 	        repository2.setAuthenticationManager( authManager );
 	        SVNClientManager manager = SVNClientManager.newInstance();
 	        manager.setAuthenticationManager(authManager);
-	        String root = SVN_URL + wrapper.getDeployDir() + "/";
 	        
 	        //한번 초기화
 	        commitEditor = repository.getCommitEditor("commit automatically", null, true ,null);
@@ -233,20 +345,23 @@ public class connectController {
 	        	if(temp.isFile()){
 	        	String[] splitWord = temp.getFilePath().split("/");
 	        	String addedDir = "";
-	        	for(int i = 1  ; i < splitWord.length ; i++){
-	        		addedDir += "/" + splitWord[i]; 
+	        	for(int i = 0  ; i < splitWord.length ; i++){
+	        		if(i==0)
+	        			addedDir += splitWord[i];
+	        		else
+	        			addedDir += "/" + splitWord[i];
 	        		if(chkDirExist(repository2, wrapper.getDeployDir() + addedDir.replace("//", "/"))){
 	        			commitEditor.addDir(wrapper.getDeployDir() + addedDir, null, -1);
 	        		}
 	        	}
-	        	logger.debug(wrapper.getDeployDir() + "/" +  addedDir + "/" + temp.getFileName() + "," + temp.getRevision() );
+	        	logger.debug(addedDir + "/" + temp.getFileName() + "," + temp.getRevision() );
 	        		if(chkFileExist(repository2, wrapper.getDeployDir() + addedDir + "/" + temp.getFileName() )){ //there is no file already exists
 		        		commitEditor.openDir(wrapper.getDeployDir() +  addedDir , 1);
 						commitEditor.addFile(wrapper.getDeployDir() +  addedDir + "/" + temp.getFileName(), null, -1);
 			            commitEditor.changeFileProperty(wrapper.getDeployDir() + addedDir + "/" + temp.getFileName() , "filePropertyName", SVNPropertyValue.create("filePropertyValue"));
 			            commitEditor.applyTextDelta( wrapper.getDeployDir() + addedDir + "/" + temp.getFileName(), null);
 		
-			            final ByteArrayInputStream fileContentsStream = new ByteArrayInputStream( getContent(temp.getFilePath(), temp.getFileName()).getBytes());
+			            final ByteArrayInputStream fileContentsStream = new ByteArrayInputStream( getContent(temp.getFilePath(), temp.getFileName(), Long.parseLong(temp.getRevision()), "source").getBytes("utf-8"));
 			            checksum = deltaGenerator.sendDelta(wrapper.getDeployDir() + addedDir + "/" + temp.getFileName(), fileContentsStream, commitEditor, true);
 			            fileContentsStream.close();
 			            commitEditor.closeFile(wrapper.getDeployDir() + addedDir + "/" + temp.getFileName(), checksum);
@@ -258,7 +373,7 @@ public class connectController {
 			            commitEditor.changeFileProperty(wrapper.getDeployDir() + addedDir + "/" + temp.getFileName() , "filePropertyName", SVNPropertyValue.create("filePropertyValue"));
 			            commitEditor.applyTextDelta( wrapper.getDeployDir() + addedDir + "/" + temp.getFileName(), null);
 		
-			            final ByteArrayInputStream fileContentsStream = new ByteArrayInputStream( getContent(temp.getFilePath(), temp.getFileName()).getBytes());
+			            final ByteArrayInputStream fileContentsStream = new ByteArrayInputStream( getContent(temp.getFilePath(), temp.getFileName(), Long.parseLong(temp.getRevision()), "source").getBytes("utf-8"));
 			            checksum = deltaGenerator.sendDelta(wrapper.getDeployDir() + addedDir + "/" + temp.getFileName(), fileContentsStream, commitEditor, true);
 			            fileContentsStream.close();
 			            commitEditor.closeFile(wrapper.getDeployDir() + addedDir + "/" + temp.getFileName(), checksum);
@@ -275,6 +390,59 @@ public class connectController {
     		logger.debug("new Revision = " + newRevision);
     		logger.debug("=======================");
     		logger.debug("=======================");
+			result.setResult("success/"+newRevision);	    	
+	    } catch(Exception e) {
+	    	result.setResult("fail");
+	    	logger.debug(e.getMessage());
+	    } finally {
+	    	repositoryPool.dispose();
+	        svnOperationFactory.dispose();
+	        if (repository2 != null) {
+	            repository2.closeSession();
+	        }
+	    }
+		
+		return result;
+		
+	}
+	
+	@RequestMapping(value = "/delete.do",  method = RequestMethod.POST,  consumes = "application/json")
+	public @ResponseBody SimpleResult deleteCheckedList( HttpServletRequest req
+											,@RequestBody DeployInfoWrapper wrapper
+										    ) throws Exception {
+		SimpleResult result = new SimpleResult();
+		SVN_COPY_DIR = new HashMap<String, String>();
+		ISVNEditor commitEditor = null;
+		final SvnOperationFactory svnOperationFactory = new SvnOperationFactory();
+		final ISVNRepositoryPool repositoryPool = new DefaultSVNRepositoryPool(null, null);
+		SVNRepository repository2 = null;
+		
+	    try {
+			final SVNRepository repository = repositoryPool.createRepository(SVNURL.parseURIEncoded( SVN_URL2 ), true);
+			repository2 = repositoryPool.createRepository(SVNURL.parseURIEncoded( SVN_URL2 ), false);
+			
+	        ISVNAuthenticationManager authManager = SVNWCUtil.createDefaultAuthenticationManager( SVN_USER2 , SVN_PASSWORD2 );
+	        repository.setAuthenticationManager( authManager );
+	        repository2.setAuthenticationManager( authManager );
+	        SVNClientManager manager = SVNClientManager.newInstance();
+	        manager.setAuthenticationManager(authManager);
+	        
+	        commitEditor = repository.getCommitEditor("commit automatically", null, true ,null);
+	        commitEditor.openRoot(-1);
+	        for(DeployInfo temp : wrapper.getDeploys()){
+	        	if(temp.getFilePath().equals(temp.getFileName()))
+	        		commitEditor.deleteEntry(temp.getFilePath(), -1);
+	        	else
+	        		commitEditor.deleteEntry(temp.getFilePath() + temp.getFileName(), -1);
+	        }
+	        
+	        SVNCommitInfo info = commitEditor.closeEdit();
+    		long newRevision = info.getNewRevision();
+    		logger.debug("=======================");
+    		logger.debug("=======================");
+    		logger.debug("new Revision = " + newRevision);
+    		logger.debug("=======================");
+    		logger.debug("=======================");
 			result.setResult("success");	    	
 	    } catch(Exception e) {
 	    	result.setResult("fail");
@@ -283,14 +451,14 @@ public class connectController {
 	    	repositoryPool.dispose();
 	        svnOperationFactory.dispose();
 	        if (repository2 != null) {
-	            //it should be closed by hand because it was created with mayReuse=false
 	            repository2.closeSession();
 	        }
 	    }
-		
-		return result;
+	        
+	    return result;
 		
 	}
+		
 	
 	public static List<String> getChildList(SVNRepository repository, List<SvnInfo> svnInfo) throws SVNException {
 		

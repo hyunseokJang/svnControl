@@ -20,12 +20,17 @@
 			</beans:list>
 		</beans:property>
 	</beans:bean>
+	
+	<jdbc:embedded-database id="dataSource" type="HSQL">
+		<jdbc:script location="classpath:create.sql"/>
+		<jdbc:script location="classpath:insert.sql"/>
+	</jdbc:embedded-database>
 
-	<beans:bean id="dataSource" class="org.springframework.jndi.JndiObjectFactoryBean"> 
+	<!-- <beans:bean id="dataSource" class="org.springframework.jndi.JndiObjectFactoryBean"> 
 		<beans:property name="jndiName">
 			<beans:value>${jdbc.default.jndi.name}</beans:value>
 		</beans:property>
-	</beans:bean>
+	</beans:bean> -->
 
 	<!-- 트랜잭션 -->
 	<beans:bean id="transactionManager"

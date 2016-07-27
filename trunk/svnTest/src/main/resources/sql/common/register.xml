@@ -4,15 +4,22 @@
 <mapper namespace="member">
  
     <insert id="registerMember" parameterType="hashmap">
-      	
-      INSERT INTO member 
+    
+      INSERT INTO member(
+      	  id,
+		  name,
+		  age,
+		  gender,
+		  address,
+		  password
+      ) 
       VALUES( 
       		  #{userId}, 
       		  #{userName}, 
-      		  #{passWord}, 
       		  #{age}, 
       		  #{gender}, 
-      		  #{addr}
+      		  #{addr},
+      		  #{passWord}
       		  )
        
     </insert>
