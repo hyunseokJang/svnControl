@@ -96,14 +96,16 @@
 						
 						Tree = data.svnList;
 						$('#svnRootDir').html('');
-						for(var i = 0 ; i < data.rootList.length; i++){
+						/* for(var i = 0 ; i < data.rootList.length; i++){
 							if(data.rootList[i] != 'trunk'){
 								$('#svnRootDir').append('<option value=\"' + data.rootList[i] + '\">' + data.rootList[i] + '</option>');	
 							}
-						}
+						} */
 						
+						$('#svnRootDir').append('<option value=\"\"</option>');
 						$('#deployCheckdList').removeClass('display-none');
 						$('#svnRootDir').removeClass('display-none');
+						$('#getHistory').removeClass('display-none');
 						fnObj.pageStart.delay(0.1);
 					}
 				    ,error:function(e) {	// 이곳의 ajax에서 에러가 나면 얼럿창으로 에러 메시지 출력
@@ -147,6 +149,9 @@
 						
 						Tree_target = data.svnList;;
 						fnObj2.pageStart.delay(0.1);
+						$('#getHistory2').removeClass('display-none');
+						$('#deleteCheckdList').removeClass('display-none');
+						
 					}
 				    ,error:function(e) {	// 이곳의 ajax에서 에러가 나면 얼럿창으로 에러 메시지 출력
 				    	
@@ -177,7 +182,26 @@
 					,url:url		// url 주소
 					,data:params	//  요청에 전달되는 프로퍼티를 가진 객체
 					,success:function(data){	//응답이 성공 상태 코드를 반환하면 호출되는 함수
-						$('#readDiffcontents').html('<xmp>' + data + '</xmp>');
+						
+						var diffContents = '';
+						for(var i = 0 ; i < data.length; i++){
+							if(data[i].indexOf("-#") > -1 || (data[i].indexOf("-") == 0 && data[i].indexOf("---") < 0)){
+								diffContents += '<font style="color:red">';
+							}
+							if(data[i].indexOf("+#") > -1 || (data[i].indexOf("+") == 0 && data[i].indexOf("+++") < 0)){
+								diffContents += '<font style="color:blue">';
+							}
+							if(data[i].indexOf("-#") > -1 || (data[i].indexOf("-") == 0 && data[i].indexOf("---") < 0)){
+								diffContents += '<xmp>' + data[i] + '</xmp></font>';
+							}
+							else if(data[i].indexOf("+#") > -1 || (data[i].indexOf("+") == 0 && data[i].indexOf("+++") < 0)){
+								diffContents += '<xmp>' + data[i] + '</xmp></font>';
+							}
+							else{
+								diffContents += '<xmp>' + data[i] + '</xmp></font>';
+							}
+						}
+						$('#readDiffcontents').html(diffContents);
 					}
 				    ,error:function(e) {	// 이곳의 ajax에서 에러가 나면 얼럿창으로 에러 메시지 출력
 				    	
@@ -197,7 +221,9 @@
 		
 	  $("#deployCheckdList").click(function () {
 			
-		    var result = confirm($('#svnRootDir option:selected').val() + '로 커밋하시겠습니까?');
+		    //var result = confirm($('#svnRootDir option:selected').val() + '로 커밋하시겠습니까?');
+		    var result = confirm('커밋하시겠습니까?');
+		    
 		    if(!result)
 		    	return false;
 		  	var url = '<c:url value="/svn/deploy.do" />';
@@ -218,7 +244,7 @@
 				}
 			}
 			
-			params += "], \"deployDir\" : \"" + $('#svnRootDir option:selected').val() + "\" }";
+			params += "], \"deployDir\" : \"" + $('#svnRootDir option:selected').val() + "\", \"commitLog\" : \"" + $('#commitLog').val() + "\" }";
 			$.ajax({
 					type:"post"		// 포스트방식
 					,url:url		// url 주소
@@ -241,7 +267,111 @@
 				    }
 			});
 		});
-		
+	  
+	  $("#getHistory").click(function () {
+		 
+		  var params = { "gubun" : "source"}
+		  var url = '/svn/getHistory.do';
+		  $.ajax({
+			   type : "post"
+			  ,url : url
+			  ,data : params
+			  ,dataType : "json"
+			  ,success : function (data){
+				  $('#historyLog').val('최근 배포 Revision :' + data.revision + "\n"
+						              +'배포자 :' + data.author + "\n"
+						              +'배포 로그 :' + data.log + "\n"
+						              +'배포 날짜 :' + data.data + "\n"
+						              +'배포 소스 :' + data.change);
+			  }
+		  	,error:function(e) {	// 이곳의 ajax에서 에러가 나면 얼럿창으로 에러 메시지 출력
+		    	
+		    	alert(e.responseText);
+		    }
+		    ,beforeSend:function(){
+		        $('.wrap-loading').removeClass('display-none');
+		    }
+			,complete:function(){
+		        $('.wrap-loading').addClass('display-none');
+		 
+		    }
+		  	,timeout : 100000
+		  })
+	  });
+	  $("#getHistory2").click(function () {
+			 
+		  var params = { "gubun" : "target"}
+		  var url = '/svn/getHistory.do';
+		  $.ajax({
+			   type : "post"
+			  ,url : url
+			  ,data : params
+			  ,dataType : "json"
+			  ,success : function (data){
+				  $('#historyLog2').val('최근 배포 Revision :' + data.revision + "\n"
+						              +'배포자 :' + data.author + "\n"
+						              +'배포 로그 :' + data.log + "\n"
+						              +'배포 날짜 :' + data.data + "\n"
+						              +'배포 소스 :' + data.change);
+			  }
+		  	,error:function(e) {	// 이곳의 ajax에서 에러가 나면 얼럿창으로 에러 메시지 출력
+		    	
+		    	alert(e.responseText);
+		    }
+		    ,beforeSend:function(){
+		        $('.wrap-loading').removeClass('display-none');
+		    }
+			,complete:function(){
+		        $('.wrap-loading').addClass('display-none');
+		 
+		    }
+		  	,timeout : 100000
+		  })
+	  });
+	  
+	  $("#deleteCheckdList").click(function () {
+			 
+		  var result = confirm('지우시겠습니까?');
+		  if(!result)
+			  return false;
+		  
+		  var url = '/svn/delete.do';
+		  var selectedList = myTree_target.getSelectedList();
+		  var params = "{ \"deploys\" : [";
+		  params += "{ \"filePath\" : \""
+			        + selectedList.item.path
+			        + "\" , \"fileName\" : \""
+			        + selectedList.item.name
+			        + "\" , \"revision\" : \""
+			        + selectedList.item.revision
+			        + "\" , \"file\" : \""
+			        + selectedList.item.file
+			        + "\"}" ;
+		  params += "], \"commitLog\" : \"" + $('#commitLog').val() + "\", \"deployDir\" : \"\"}";
+			        
+		  $.ajax({
+			   type : "post"
+			  ,url : url
+			  ,data : params
+			  ,contentType : "application/json"
+			  ,dataType : "json"
+			  ,success : function (data){
+				  alert(data.result);
+			  }
+		  	,error:function(e) {	// 이곳의 ajax에서 에러가 나면 얼럿창으로 에러 메시지 출력
+		    	
+		    	alert(e.responseText);
+		    }
+		    ,beforeSend:function(){
+		        $('.wrap-loading').removeClass('display-none');
+		    }
+			,complete:function(){
+		        $('.wrap-loading').addClass('display-none');
+		 
+		    }
+		  	,timeout : 100000
+		  })
+	  });
 	});
 	
 	
@@ -250,7 +380,10 @@
 		var url = '<c:url value="/svn/getContent.do" />';
 		
 		var params = {"name" : item.name
-				     ,"path": item.path}; 
+				     ,"path": item.path
+				     ,"rev" : item.revision
+				     ,"gubun" : "source"
+				     }; 
 		
 		console.log(item.path + item.name + item.revision);
 		
@@ -279,7 +412,10 @@
 		
 		var url = '<c:url value="/svn/getContent.do" />';
 		var params = {"name" : item.name
-				     ,"path": item.path}; 
+			     ,"path": item.path
+			     ,"rev" : item.revision
+			     ,"gubun" : "target"
+			     }; 
 		
 		$.ajax({
 				type:"post"		// 포스트방식
@@ -474,27 +610,39 @@
 	<div id="AXPageBody" class="SampleAXSelect">
         <div id="demoPageTabTarget" class="AXdemoPageTabTarget"></div>
 		<div class="AXdemoPageContent">
-			<div class="title"><h1>SVN Explorer</h1></div>
+			<div class="title">
+				<h1>Source Managementr</h1>
+			</div>
+			[User ID] : <font style="color : red"> <c:out value="${userId}" ></c:out></font> &nbsp;&nbsp; [User Name] : <font style="color : red"><c:out value="${userName}"></c:out></font>
 			<a href="<c:url value="/logout.do" />"><input type="button" value="Logout" class="AXButton Green" id="logout" name="logout" /></a>
 			<hr>
 			
-			
-			
+			Commit Log : <input type="text" id="commitLog" value="Please Input Commit Comment."><br>
+			<table>
+				<tr>
+					<td> source history : <textarea rows="5" cols="50" id="historyLog"></textarea></td>
+					<td> target history : <textarea rows="5" cols="50" id="historyLog2"></textarea></td>
+				</tr>
+			</table>
+					
+			<hr>
+				
 			<section class="ax-layer-1">
 						
 				<div class="ax-col-5">
 				<div class="ax-unit">
 					<input type="button" value="View Source SVN" class="AXButton Red" id="readMore" name="readMore"/>
 					<input type="button" value="Deploy" class="AXButton Red display-none" id="deployCheckdList" name="deployCheckdList"/>
+					<input type="button" value="Get History" class="AXButton Red display-none" id="getHistory" name="getHistory">
 					<select class="AXSelect display-none" id="svnRootDir" name="svnRootDir"> 
 	                </select>
 					<form id="svnInfoForm" name="svnInfoForm">
 						<label>SVN Url</label>
-						<input type="text" id="svnUrl" name="svnUrl" value="svn://wua.social:3690" class="AXInput" />
+						<input type="text" id="svnUrl" name="svnUrl" value="sample url" class="AXInput" />
 						<label>SVN User Name</label>
-						<input type="text" id="svnUser" name="svnUser" value="mostgreat" class="AXInput" />
+						<input type="text" id="svnUser" name="svnUser" value="sample" class="AXInput" />
 						<label>SVN Password</label>
-						<input type="password" id="svnPassword" name="svnPassword" value="1234" class="AXInput" />
+						<input type="password" id="svnPassword" name="svnPassword" value="sample" class="AXInput" />
 						<input type="hidden" id="gubun" name="gubun" value="source" class="AXInput" />
 					</form>
 					
@@ -517,13 +665,16 @@
 			
 			<div class="ax-col-5">
 					<input type="button" value="View Target SVN" class="AXButton Red" id="readMore2" name="readMore2"/>
+					<input type="button" value="Delete" class="AXButton Red display-none" id="deleteCheckdList" name="deleteCheckdList"/>
+					<input type="button" value="Get History" class="AXButton Red display-none" id="getHistory2" name="getHistory2">
 					<form id="svnInfoForm2" name="svnInfoForm2">
 						<label>SVN Url</label>
-						<input type="text" id="svnUrl2" name="svnUrl" value="svn://wua.social:3690" class="AXInput" />
+						<input type="text" id="svnUrl2" name="svnUrl" value="sample url" class="AXInput" />
 						<label>SVN User Name</label>
-						<input type="text" id="svnUser2" name="svnUser" value="mostgreat" class="AXInput" />
+						<input type="text" id="svnUser2" name="svnUser" value="sample" class="AXInput" />
 						<label>SVN Password</label>
-						<input type="password" id="svnPassword2" name="svnPassword" value="1234" class="AXInput" />
+						<input type="password" id="svnPassword2" name="svnPassword" value="sample" class="AXInput" />
+						<input type="hidden" id="gubun" name="gubun" value="target" class="AXInput" />
 					</form>
 					
 					<table cellpadding="0" cellspacing="0" style="table-layout:fixed;width:100%;">
