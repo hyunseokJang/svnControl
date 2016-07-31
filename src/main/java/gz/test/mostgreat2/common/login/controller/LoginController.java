@@ -129,7 +129,8 @@ public class LoginController {
 		sessVo.setPassWd(passWd);
 
 		sess.setAttribute("loginUser", sessVo);
-
+		sess.setAttribute("userId", resultLogin.get("ID"));
+		sess.setAttribute("userName", resultLogin.get("NAME"));
 		result.put("result", "success");
 		result.put("code", "1");
 		return result;
